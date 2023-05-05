@@ -2,6 +2,7 @@ package service
 
 import (
 	"database/sql"
+	"errors"
 	"examples-go/common/model"
 	"fmt"
 	_ "github.com/lib/pq"
@@ -101,23 +102,45 @@ func (m *Memory) nexId() int {
 	return m.Id
 }
 
-func Create(name string) {
+func Create(name string) (string, error) {
+	p := GetByName(name)
+	if p.Id > 0 {
+		msg := "Constrain product by name =" + name
+		fmt.Println(msg)
+		return "", errors.New(msg)
+	}
 	insertNewProduct := `insert into "product"("name") values($1)`
 	connection := createConnection()
 	defer connection.Close()
 	_, e := connection.Exec(insertNewProduct, name)
 	CheckError(e)
+	return name, nil
+}
+
+func GetByName(name string) model.Product {
+	if name != "" {
+		c := createConnection()
+		defer c.Close()
+		product := model.Product{}
+		var groupId int
+		row := c.QueryRow("SELECT id, name, coalesce(group_id, 0) FROM product WHERE name = $1", name)
+		err := row.Scan(&product.Id, &product.Name, &groupId)
+		CheckError(err)
+		product.Gr = findGroup(groupId)
+		return product
+	}
+	return model.Product{}
 }
 
 func GetById(id int) model.Product {
 	findProductByID := "SELECT id, name, coalesce(group_id, 0) FROM product WHERE id = $1"
-	connection := createConnection()
-	defer connection.Close()
+	c := createConnection()
+	defer c.Close()
 	var name string
 	var idDb int
 	var groupId int
-	err := connection.QueryRow(findProductByID, id).Scan(&idDb, &name, &groupId)
-	product := model.Product{Id: idDb, Name: name, Gr: findGroup(groupId, connection)}
+	err := c.QueryRow(findProductByID, id).Scan(&idDb, &name, &groupId)
+	product := model.Product{Id: idDb, Name: name, Gr: findGroup(groupId)}
 	CheckError(err)
 	return product
 }
@@ -131,49 +154,56 @@ func CheckError(err error) {
 		case nil:
 			break
 		default:
-			log.Fatalln("Unable to scan the row. %v", err)
+			log.Println("Unable to scan the row. ", err)
 		}
 	}
 }
 
+func CheckErrorRabbitMq(err error) {
+	if err != nil {
+		log.Println("RabbitMq =", err)
+	}
+}
+
 func GetAll() []model.Product {
-	connection := createConnection()
-	defer connection.Close()
-	query, err := connection.Query("SELECT id, name, COALESCE(group_id, 0) FROM product")
+	c := createConnection()
+	defer c.Close()
+	query, err := c.Query("SELECT id, name, COALESCE(group_id, 0) FROM product")
 	CheckError(err)
 	products := make([]model.Product, 0)
 	for query.Next() {
 		var name string
-		var idDb int
+		var id int
 		var groupId int
-		err := query.Scan(&idDb, &name, &groupId)
+		err := query.Scan(&id, &name, &groupId)
 		CheckError(err)
-		products = append(products, model.Product{
-			Id:   idDb,
+		product := model.Product{
+			Id:   id,
 			Name: name,
-			Gr:   findGroup(groupId, connection),
-		})
+		}
+		product.Gr = findGroup(id)
+		products = append(products, product)
 	}
 	return products
 }
 
-func findGroup(groupId int, c *sql.DB) model.Group {
+func findGroup(id int) model.Group {
+	c := createConnection()
+	defer c.Close()
 	var group model.Group
-	if groupId > 0 {
-		var grId int
-		var grName string
+	if id > 0 {
 		findGroupById := "SELECT * FROM product_group WHERE id = $1"
-		c.QueryRow(findGroupById, groupId).Scan(&grId, &grName)
-		group.Id = grId
-		group.Name = grName
+		err := c.QueryRow(findGroupById, id).Scan(&group.Id, &group.Name)
+		CheckError(err)
 	}
 	return group
 }
 
 func createConnection() *sql.DB {
 	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, u, p, db)
-	open, err := sql.Open("postgres", psqlconn)
+	c, err := sql.Open("postgres", psqlconn)
 	CheckError(err)
-	open.Exec(`set search_path='test-go'`)
-	return open
+	_, err = c.Exec(`set search_path='test-go'`)
+	CheckError(err)
+	return c
 }
