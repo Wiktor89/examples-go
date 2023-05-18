@@ -1,4 +1,4 @@
-package model
+package models
 
 type Group struct {
 	Id   int    `json:"id"`

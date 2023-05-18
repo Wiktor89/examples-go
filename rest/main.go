@@ -2,16 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"examples-go/common/model"
-	_ "examples-go/rabbitmq/service"
-	service2 "examples-go/rabbitmq/service"
-	"examples-go/rest/service"
+	er "examples-go/checks/error"
+	model2 "examples-go/models"
+	"examples-go/rabbitmq"
+	_ "examples-go/rabbitmq"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
-	"time"
 )
 
 const (
@@ -27,11 +26,11 @@ func main() {
 func AppRun() {
 	r := gin.Default()
 	r.GET(ApiV1+"/products", func(c *gin.Context) {
-		c.JSONP(http.StatusOK, service.GetAll())
+		c.JSONP(http.StatusOK, GetAll())
 	})
 	r.POST(ApiV1+"/products", func(c *gin.Context) {
-		p2 := model.Product{}
-		service.CheckError(c.ShouldBindJSON(&p2))
+		p2 := model2.Product{}
+		er.CheckErrorHttp(c.ShouldBindJSON(&p2))
 		sendQ(p2, os.Getenv("PRODUCER_Q"))
 		c.Status(http.StatusOK)
 	})
@@ -39,23 +38,20 @@ func AppRun() {
 }
 
 func ListenerQ() {
-	service2.QueueDeclare(os.Getenv("DECLARE_Q"))
+	rabbitmq.QueueDeclare(os.Getenv("DECLARE_Q"))
 	go func() {
 		for {
-			message := service2.ConsumerMessage(os.Getenv("CONSUMER_Q"))
+			message := rabbitmq.ConsumerMessage(os.Getenv("CONSUMER_Q"))
 			if message != nil {
-				p := model.Product{}
+				p := model2.Product{}
 				err := json.Unmarshal(message, &p)
-				service.CheckError(err)
-				_, err = service.Create(p.Name)
-				service.CheckError(err)
+				er.CheckErrorRabbitMq(err)
+				_, err = Create(p.Name)
+				er.CheckErrorRabbitMq(err)
 				log.Println("[x] ", p)
 			} else {
 				log.Println("NO message from que")
 			}
-			log.Println("Before")
-			time.Sleep(time.Minute / 6)
-			log.Println("After")
 		}
 	}()
 }
@@ -67,10 +63,10 @@ func LoadEnv() {
 	}
 }
 
-func sendQ(product model.Product, nameQ string) {
+func sendQ(product model2.Product, nameQ string) {
 	p, err := json.Marshal(product)
-	service.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 	if err == nil {
-		service2.SendMessage(p, nameQ)
+		rabbitmq.SendMessage(p, nameQ)
 	}
 }
