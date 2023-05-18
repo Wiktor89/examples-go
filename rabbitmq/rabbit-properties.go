@@ -2,7 +2,7 @@ package rabbitmq
 
 import (
 	"context"
-	error2 "examples-go/checks/error"
+	er "examples-go/checks/error"
 	"github.com/rabbitmq/amqp091-go"
 	"log"
 	"os"
@@ -10,7 +10,7 @@ import (
 
 func createConnection() *amqp091.Connection {
 	connection, err := amqp091.Dial(os.Getenv("RABBIT"))
-	error2.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 	return connection
 }
 
@@ -19,7 +19,7 @@ func SendMessage(msg []byte, nameQ string) {
 	defer connection.Close()
 	channel, err := connection.Channel()
 	defer channel.Close()
-	error2.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 	err = channel.PublishWithContext(context.Background(),
 		"",
 		nameQ,
@@ -38,7 +38,7 @@ func ConsumerMessage(nameQ string) []byte {
 	connection := createConnection()
 	defer connection.Close()
 	channel, err := connection.Channel()
-	error2.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 	defer channel.Close()
 	consume, err := channel.Consume(nameQ,
 		"",
@@ -47,7 +47,7 @@ func ConsumerMessage(nameQ string) []byte {
 		false,
 		false,
 		nil)
-	error2.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 	for msg := range consume {
 		return msg.Body
 	}
@@ -58,14 +58,14 @@ func QueueDeclare(nameQ string) {
 	connection := createConnection()
 	defer func(connection *amqp091.Connection) {
 		err := connection.Close()
-		error2.CheckErrorRabbitMq(err)
+		er.CheckErrorRabbitMq(err)
 	}(connection)
 	channel, err := connection.Channel()
 	defer func(channel *amqp091.Channel) {
 		err := channel.Close()
-		error2.CheckErrorRabbitMq(err)
+		er.CheckErrorRabbitMq(err)
 	}(channel)
-	error2.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 	_, err = channel.QueueDeclare(nameQ, false, false, false, false, nil)
-	error2.CheckErrorRabbitMq(err)
+	er.CheckErrorRabbitMq(err)
 }
