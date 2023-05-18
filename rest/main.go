@@ -50,7 +50,7 @@ func ListenerQ() {
 				er.CheckErrorRabbitMq(err)
 				log.Println("[x] ", p)
 			} else {
-				log.Println("NO message from que")
+				log.Println("[x] NO message from que")
 			}
 		}
 	}()
