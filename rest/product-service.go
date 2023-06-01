@@ -57,14 +57,14 @@ func (m *Memory) GetByName(name string) model.Product {
 	return model.Product{}
 }
 
-func (m *Memory) GetById(id int) model.Product {
+func (m *Memory) GetById(id int) (model.Product, error) {
 	log.Println("Get product by id =", id)
 	for _, p := range m.m {
 		if p.Id == id {
-			return p
+			return p, nil
 		}
 	}
-	return model.Product{}
+	return model.Product{}, errors.New(fmt.Sprintf("Not product by id = %d", id))
 }
 
 func (m *Memory) Create(name string) int {
